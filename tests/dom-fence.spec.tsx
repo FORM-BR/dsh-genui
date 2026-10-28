@@ -128,7 +128,7 @@ afterEach(() => {
 })
 
 describe('installDomFenceRenderer', () => {
-  it.each(['Code', 'Code block', '代码块'])('renders canonical GenUI from a generic %s banner', async label => {
+  it.each(['Code', 'Code block', '代码块', 'Bloco de código'])('renders canonical GenUI from a generic %s banner', async label => {
     const row = assistantRow('generic-valid')
     const block = genericCodeBlock(VALID_SPEC, label)
     row.appendChild(block)
@@ -140,11 +140,23 @@ describe('installDomFenceRenderer', () => {
     } finally { dispose() }
   })
 
+  it('renders a generic fence with an unknown field and says which field was ignored', async () => {
+    const row = assistantRow('generic-unknown-field')
+    const block = genericCodeBlock('{"gap":12,"items":[{"type":"text","content":"你好，世界"}],"gap2":0}', 'Bloco de código')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const dispose = installDomFenceRenderer(makeModernCtx('generic-session'), () => {})
+    try {
+      expect(await waitFor(() => block.hasAttribute('data-genui-rendered'))).toBe(true)
+      expect(await waitFor(() => row.querySelector('.genui-dom-fence')?.textContent?.includes('你好，世界') === true)).toBe(true)
+      expect(row.querySelector('.genui-dom-fence-notice')?.textContent).toContain('gap2')
+    } finally { dispose() }
+  })
+
   it.each([
     '{"name":"ordinary","items":[]}',
     '{"items":[{"type":"text","content":',
     '{"items":[{"type":"button"}]}',
-    '{"items":[{"type":"text","content":"你好","unknown":true}]}',
     '{"items":[{"type":"text","text":"别名"}]}',
   ])('keeps invalid or ordinary JSON in a generic CodeBlock: %s', async raw => {
     const row = assistantRow('generic-rejected')

@@ -188,7 +188,7 @@ function infostringOf(block: Element): 'dsh-ui' | 'svg' | null {
   return null
 }
 
-const GENERIC_CODE_LABELS = new Set(['Code', 'Code block', '代码块'])
+const GENERIC_CODE_LABELS = new Set(['Code', 'Code block', '代码块', 'Bloco de código'])
 
 /** Read a language that the host still exposes in its CodeBlock banner. */
 function domLanguageOf(block: Element): string | null {
@@ -227,8 +227,23 @@ function isGenericGenuiFence(block: Element, raw: string): boolean {
   } catch {
     return false
   }
-  if (!validateCanonicalGenuiSpec(value).ok || diagnoseUnknownGenuiFields(value).length > 0) return false
+  if (!validateCanonicalGenuiSpec(value).ok) return false
+  const diagnostics = diagnoseUnknownGenuiFields(value)
+  // 模型常多写一个不存在的字段（如 gap2）：内容本身合法，照常渲染并提示；别名仍保持为代码块。
+  if (diagnostics.length > 0) {
+    const items = (value as { items?: unknown }).items
+    return Array.isArray(items) && items.length > 0 && diagnostics.every(item => item.kind === 'unknown-field')
+  }
   return JSON.stringify(normalizeGenuiSpec(value).value) === JSON.stringify(value)
+}
+
+/** Unknown field paths a generic-fence spec carried, for the discreet notice. */
+function unknownFieldsOf(raw: string): string[] {
+  try {
+    return diagnoseUnknownGenuiFields(JSON.parse(raw)).filter(item => item.kind === 'unknown-field').map(item => item.path)
+  } catch {
+    return []
+  }
 }
 
 /** Raw fence body from the stock block's code surface. */
@@ -776,6 +791,12 @@ export function installDomFenceRenderer(
       // Streaming, spec-shaped, nothing renderable yet: show the skeleton
       // rather than a wall of half-written JSON.
       payload = <GenuiSkeleton />
+    }
+    if (genericGenui && node !== null) {
+      const ignored = unknownFieldsOf(raw)
+      if (ignored.length > 0) {
+        payload = <>{node}<div className="genui-dom-fence-notice" role="note">{`Campo desconhecido ignorado: ${ignored.join(', ')}`}</div></>
+      }
     }
     clearDiagnostic(block)
     // Mount FIRST, hide AFTER (issue #19): the stock block is only ever
